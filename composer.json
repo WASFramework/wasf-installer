@@ -1,0 +1,20 @@
+{
+  "name": "wasframework/wasf-installer",
+  "description": "WASF Framework Installer CLI",
+  "type": "project",
+  "license": "MIT",
+
+  "bin": ["bin/wasf"],
+
+  "autoload": {
+    "psr-4": {
+      "WASFInstaller\\": "src/"
+    }
+  },
+
+  "require": {
+    "php": ">=8.1",
+    "symfony/console": "^7.0",
+    "symfony/process": "^7.0"
+  }
+}
