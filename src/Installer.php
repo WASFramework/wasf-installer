@@ -11,11 +11,11 @@ class Installer
     protected string $yellow  = "\033[33m";
     protected string $cyan    = "\033[36m";
     protected string $bold    = "\033[1m";
+    protected string $blue    = "\033[34m"; // FIXED: missing color
 
     public function run(array $argv)
     {
         $this->clear();
-
         $this->banner();
 
         if (!isset($argv[1]) || $argv[1] !== 'new') {
@@ -54,11 +54,11 @@ class Installer
     {
         echo $this->cyan . $this->bold . "
  __          ___     ______  ______
- \ \        / _ \   |  ____||  ____|
-  \ \  /\  / / \ \  | |____ | |__
-   \ \/  \/ /___\ \ |____  ||  __|
-    \  /\  /_____\ \ ____| || |
-     \/  \/       \_\______||_|
+ \\ \\        / _ \\   |  ____||  ____|
+  \\ \\  /\\  / / \\ \\  | |____ | |__
+   \\ \\/  \\/ /___\\ \\ |____  ||  __|
+    \\  /\\  /_____\\ \\ ____| || |
+     \\/  \\/       \\_\\______||_|
 " . $this->reset;
 
         echo $this->green . $this->bold . "     🔥 WASF Framework Installer\n" . $this->reset;
@@ -77,7 +77,7 @@ class Installer
     }
 
     // ===================================================
-    // SPINNER (compatible with Windows)
+    // SPINNER (Improved)
     // ===================================================
 
     private function spinner(string $text, callable $callback)
@@ -87,14 +87,15 @@ class Installer
 
         echo "{$this->yellow}{$text}... {$this->reset}";
 
-        // Run the callback in blocking mode (no pcntl)
-        while (true) {
+        // Execute callback now while spinner runs for effect
+        $start = microtime(true);
+        $callback();
+
+        // Spinner animation after callback for better UX
+        while (microtime(true) - $start < 0.7) {
             echo "\r{$this->yellow}{$text} {$frames[$i]}{$this->reset}";
             $i = ($i + 1) % count($frames);
-
-            // Run callback once
-            $callback();
-            break;
+            usleep(90000);
         }
 
         echo "\r{$this->green}✔ {$text}{$this->reset}\n";
@@ -112,7 +113,10 @@ class Installer
             2 => ["pipe", "w"],
         ], $pipes);
 
-        if (!is_resource($proc)) return 1;
+        if (!is_resource($proc)) {
+            echo $this->red . "Failed to start composer process.\n" . $this->reset;
+            return 1;
+        }
 
         stream_set_blocking($pipes[1], false);
         stream_set_blocking($pipes[2], false);
@@ -125,22 +129,26 @@ class Installer
         while (true) {
             $status = proc_get_status($proc);
 
-            echo stream_get_contents($pipes[1]);
-            echo stream_get_contents($pipes[2]);
+            // Print output without breaking progress bar
+            $out = stream_get_contents($pipes[1]);
+            if ($out) echo "\n" . trim($out);
+
+            $err = stream_get_contents($pipes[2]);
+            if ($err) echo "\n" . trim($err);
 
             if (!$status["running"]) {
                 $this->renderProgress(100);
                 break;
             }
 
-            // Time-based progress
+            // Very smooth time-based progress
             $elapsed = microtime(true) - $start;
             if ($percent < 90) {
-                $percent = min(90, $elapsed * 8); // slower ramp
+                $percent = min(90, $elapsed * 9);
             }
 
             $this->renderProgress((int)$percent);
-            usleep(100000);
+            usleep(120000);
         }
 
         fclose($pipes[1]);
@@ -164,21 +172,35 @@ class Installer
 
     private function postInstall(string $project)
     {
-        echo "\n";
-        echo "{$this->cyan}→ Finishing setup...{$this->reset}\n";
+        echo "\n{$this->cyan}→ Finishing setup...{$this->reset}\n";
 
-        // Generate WASF_KEY
+        // Generate WASF_KEY safely
         $this->spinner("Generating WASF_KEY", function() use ($project) {
-            $env = file_get_contents("$project/.env");
+
+            $envFile = "$project/.env";
+
+            if (!file_exists($envFile)) {
+                file_put_contents($envFile, "WASF_KEY=\n");
+            }
+
+            $env = file_get_contents($envFile);
+
             $key = "WASF_KEY=" . base64_encode(random_bytes(32));
-            $env = preg_replace("/WASF_KEY=.*/", $key, $env);
-            file_put_contents("$project/.env", $env);
+
+            if (preg_match("/WASF_KEY=/", $env)) {
+                $env = preg_replace("/WASF_KEY=.*/", $key, $env);
+            } else {
+                $env .= "\n" . $key;
+            }
+
+            file_put_contents($envFile, $env);
         });
 
-        // chmod
+        // chmod (Linux only)
         if (DIRECTORY_SEPARATOR === "/") {
             $this->spinner("Setting permissions", function() use ($project) {
-                exec("chmod -R 777 $project/storage");
+                $target = escapeshellarg("$project/storage");
+                exec("chmod -R 777 $target");
             });
         }
 
