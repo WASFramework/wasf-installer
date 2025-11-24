@@ -61,7 +61,7 @@ class Installer
      \/  \/       \_\______||_|
 " . $this->reset;
 
-        echo $this->green . $this->bold . "     🔥 WASF Framework Installer PRO\n" . $this->reset;
+        echo $this->green . $this->bold . "     🔥 WASF Framework Installer\n" . $this->reset;
         echo $this->cyan  . "============================================\n\n" . $this->reset;
     }
 
@@ -173,22 +173,6 @@ class Installer
             $key = "WASF_KEY=" . base64_encode(random_bytes(32));
             $env = preg_replace("/WASF_KEY=.*/", $key, $env);
             file_put_contents("$project/.env", $env);
-        });
-
-        // Git init
-        $this->spinner("Initializing Git", function() use ($project) {
-            chdir($project);
-            exec("git init");
-        });
-
-        // .gitignore
-        $this->spinner("Creating .gitignore", function() use ($project) {
-            file_put_contents("$project/.gitignore", <<<TXT
-/vendor/
-/storage/views/
-/storage/logs/
-/.env
-TXT);
         });
 
         // chmod
